@@ -1,0 +1,152 @@
+<?php
+
+/**
+ * @file
+ * Auto tagging suggestion module file.
+ */
+
+/**
+ * Implements hook_help().
+ */
+function auto_tagging_suggestions_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#auto_tagging_suggestions':
+      $output = '';
+      $output .= '<p>' . t('Hellllllp') . '</p>';
+      return $output;
+  }
+}
+
+/**
+ * Implements hook_form_alter.
+ */
+function auto_tagging_suggestions_form_alter(&$form, &$form_state, $form_id) {
+  if (strpos($form_id, '_node_form') !== FALSE) {
+    $form['auto_tagging_suggestions'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Auto tagging suggestions'),
+      '#collapsible' => TRUE,
+      '#collapsed' => FALSE,
+      '#group' => 'additional_settings',
+      '#weight' => -10,
+    );
+    $from_fields[] = $to_fields[] = "Select";
+    $fields = field_info_instances("node", $form['type']['#value']);
+    foreach(array_keys($fields) as $field) {
+      $_field = field_info_field($field);
+      if($_field['type'] == "text_with_summary") {
+        $from_fields[$field] = $field;
+      }
+      elseif ($_field['type'] == "taxonomy_term_reference") {
+        $to_fields[$field] = $field;
+      }
+    }
+
+    foreach ($to_fields as $key => $value) {
+      $form[$key]['#prefix'] = "<div id='auto_tagging_suggestions-div_$key'>";
+      $form[$key]['#suffix'] = '</div>';
+    }
+
+    $form['auto_tagging_suggestions']['from'] = array(
+      '#type' => 'select',
+      '#title' => t('From'),
+      '#options' => $from_fields,
+    );
+    $form['auto_tagging_suggestions']['to'] = array(
+      '#type' => 'select',
+      '#title' => t('To'),
+      '#options' => $to_fields,
+      '#ajax' => array(
+        'callback' => 'auto_tagging_suggestions_to_callback',
+        'wrapper' => 'to-div',
+      ),
+      '#executes_submit_callback' => TRUE,
+      '#submit' => array('auto_tagging_suggestions_to_submit_handler'),
+    );
+    $form['auto_tagging_suggestions']['submit'] = array(
+      '#type' => 'button',
+      '#value' => t('Submit'),
+      '#ajax' => array(
+        'callback' => 'auto_tagging_suggestions_submit_callback',
+        'wrapper' => 'checkboxes-div',
+        'method' => 'replace',
+        'effect' => 'fade',
+      ),
+      '#executes_submit_callback' => TRUE,
+      '#submit' => array('auto_tagging_suggestions_submit_handler'),
+      '#prefix' => '<div id="to-div">',
+      '#suffix' => '</div>',
+    );
+    if(!empty(variable_get('auto_tagging_suggestions'))) {
+      $form['auto_tagging_suggestions']['submit']['#ajax']['wrapper'] = variable_get('auto_tagging_suggestions');
+    }
+    variable_set('auto_tagging_suggestions', '');
+  }
+}
+
+/**
+ * Ajax callback function to handle the changes of submit button.
+ *
+ * @param array $form
+ * @param array $form_state
+ * @return mixed
+ */
+function auto_tagging_suggestions_to_callback($form, $form_state) {
+  $form['auto_tagging_suggestions']['submit']['#ajax']['wrapper'] = 'auto_tagging_suggestions-div_' . $form_state['values']['to'];
+  return $form['auto_tagging_suggestions']['submit'];
+}
+
+/**
+ * Ajax submit handler for the to field.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function auto_tagging_suggestions_to_submit_handler($form, &$form_state) {
+  variable_set('auto_tagging_suggestions', 'auto_tagging_suggestions-div_' . $form_state['values']['to']);
+  $form_state['rebuild'] = TRUE;
+}
+
+/**
+ * Ajax callback function to handle submit of auto tagging.
+ *
+ * @param $form
+ * @param $form_state
+ * @return array
+ */
+function auto_tagging_suggestions_submit_callback($form, $form_state) {
+  $from_data = explode(' ', $form_state['values'][$form_state['values']['from']]['und'][0]['value']);
+  $to_data = array();
+  foreach ($form_state['values'][$form_state['values']['to']]['und'] as $_to) {
+    $to_data[] = $_to['name'];
+  }
+
+  $info = field_info_field($form_state['values']['to']);
+  $vocab_machine_name = $info['settings']['allowed_values'][0]['vocabulary'];
+  $vocab = taxonomy_vocabulary_machine_name_load($vocab_machine_name);
+  $terms = taxonomy_get_tree($vocab->vid);
+  $term_data = array();
+  foreach($terms as $term) {
+    $term_data[] = $term->name;
+  }
+
+  $matches = array_intersect($from_data, $term_data);
+
+  $return_array = array_unique(array_merge($to_data, $matches));
+  $return_data = '';
+  foreach ($return_array as $_ret) {
+    $return_data .= $_ret . ', ';
+  }
+  $form[$form_state['values']['to']]['und']['#value'] = $return_data;
+  return $form[$form_state['values']['to']];
+}
+
+/**
+ * Ajax submit handler to handle rebuild of form.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function auto_tagging_suggestions_submit_handler($form, &$form_state) {
+  $form_state['rebuild'] = TRUE;
+}

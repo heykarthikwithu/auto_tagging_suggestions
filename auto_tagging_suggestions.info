@@ -1,0 +1,4 @@
+name = Auto tagging suggestions
+description = "Provides auto tagging suggestions on the node page"
+core = 7.x
+package = "Fields"

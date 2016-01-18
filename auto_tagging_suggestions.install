@@ -1,0 +1,8 @@
+<?php
+
+/**
+ * Implements hook_uninstall().
+ */
+function auto_tagging_suggestions_uninstall() {
+  variable_del('auto_tagging_suggestions');
+}
